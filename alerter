@@ -1,0 +1,100 @@
+#!/bin/bash
+
+source config
+
+show_help() {
+  USAGE="$(basename "$0") [-h] [-s server] -- tool to manage Splunk alerts
+
+where:
+    -h  show this help text
+    -s  splunk server
+    -a  show app alerts
+    -f  query splunk
+    -d  delete alert
+    -q  query to create alert
+    -m  email to create alert
+    -c  create alert
+    -t  triggered alerts
+    -e  every X minutes Ex 30 minutes: */30
+    -b  before X minutes. Ex 5
+    -x  set threshold. Ex: greater than 30 - 30
+    -w  webhook url"
+
+  echo "$USAGE"
+}
+
+while getopts "h?vs:af:q:w:c:d:p:m:te:b:x:ju:" opt; do
+    case "$opt" in
+    h|\?)
+        show_help
+        ;;
+    v)  VERBOSE=1
+        ;;
+    s)  SERVER=$OPTARG
+        if [[ $SERVER =~ 'us-api' ]]
+        then
+          SPLUNK_USERNAME=$SPLUNK_USERNAME_US
+          SPLUNK_PASSWORD=$SPLUNK_PASSWORD_US
+        fi
+        if [[ $SERVER =~ 'eu-api' ]]
+        then
+          SPLUNK_USERNAME=$SPLUNK_USERNAME_EU
+          SPLUNK_PASSWORD=$SPLUNK_PASSWORD_EU
+        fi
+        if [[ $SERVER =~ 'ap-api' ]]
+        then
+          SPLUNK_USERNAME=$SPLUNK_USERNAME_AP
+          SPLUNK_PASSWORD=$SPLUNK_PASSWORD_AP
+        fi
+        ;;
+    b)  BEFORE=$OPTARG
+        ;;
+    e)  MIN=$OPTARG
+        ;;
+    x)  THRESHOLD=$OPTARG
+        ;;
+    a)  if [[ $VERBOSE == 1 ]]
+        then
+          curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} https://${SERVER}:${PORT}/servicesNS/-/${APP}/saved/searches?output_mode=json
+        else
+          SEARCH=$(curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} https://${SERVER}:${PORT}/servicesNS/-/${APP}/saved/searches?output_mode=json | sed  "s/action.email.to/actionemailto/g" | sed  "s/dispatch.earliest_time/dispatchearliest/g" | jq -r '.entry[]' | jq '.content | "Description: \(.description) Search:\(.search) Type:\(.alert_type) Threshold: \(.alert_threshold) Before:\(.dispatchearliest) Actions:\(.actions) Emails:\(.'actionemailto') Cron:\(.cron_schedule)"')
+          echo "$SEARCH" | sort | uniq | grep $FILTER
+        fi
+        ;;
+    f)  SPLUNKQUERY=$OPTARG
+        echo "curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} https://${SERVER}:${PORT}/services/search/jobs"
+        SPLUNKSID=$(curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} "https://${SERVER}:${PORT}/services/search/jobs" --data-urlencode search="search $SPLUNKQUERY" | grep sid | cut -d ">" -f 2 | cut -d "<" -f 1)
+        echo $SPLUNKSID
+        echo "Waiting for results"
+        sleep 100
+        curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} https://${SERVER}:${PORT}/services/search/jobs/${SPLUNKSID}/results?output_mode=json | jq -r '.results[] | "Host: \(.host) Source: \(.source) Raw: \(._raw)"' | sort | uniq
+        ;;
+    q)  QUERY="$OPTARG"
+        ;;
+    m)  EMAILS="$OPTARG"
+        ;;
+    w)  WEBHOOK="$OPTARG"
+        WEBHOOK_ACTION=",webhook"
+        WEBHOOK_ADD="-d action.webhook=1 -d action.webhook.param.url=${WEBHOOK}"
+        ;;
+    c)  ALERT=$(echo $OPTARG | sed 's/ /%20/g' | sed 's/\//%2F/g')
+        curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} "https://${SERVER}:${PORT}/servicesNS/nobody/${APP}/saved/searches" -d name="${ALERT}" -d description="${ALERT}" -d dispatch.earliest_time="-${BEFORE}m" -d dispatch.latest_time="now" --data-urlencode search="$QUERY" -d is_scheduled=1 -d cron_schedule="${MIN} * * * *" -d alert_type="number of events" -d alert_comparator="greater than" -d alert_threshold=${THRESHOLD} -d action.${ALERT}=1 -d is_visible=1 -d actions=email${WEBHOOK_ACTION} -d action.email.to="${EMAILS}" -d action.email.inline=1 ${WEBHOOK_ADD}
+        ;;
+    u)  ALERT=$(echo $OPTARG | sed 's/ /%20/g' | sed 's/\//%2F/g')
+        curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} "https://${SERVER}:${PORT}/servicesNS/nobody/${APP}/saved/searches/${ALERT}" -d description="${ALERT}" -d dispatch.earliest_time="-${BEFORE}m" -d dispatch.latest_time="now" --data-urlencode search="$QUERY" -d is_scheduled=1 -d cron_schedule="${MIN} * * * *" -d alert_type="number of events" -d alert_comparator="greater than" -d alert_threshold=${THRESHOLD} -d action.${ALERT}=1 -d is_visible=1 -d actions=email${WEBHOOK_ACTION} -d action.email.to="${EMAILS}" -d action.email.inline=1 ${WEBHOOK_ADD}
+        ;;
+    d)  ALERT=$(echo $OPTARG | sed 's/ /%20/g' | sed 's/\//%2F/g')
+        curl -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} --request DELETE "https://${SERVER}:${PORT}/servicesNS/nobody/ethos/saved/searches/${ALERT}"
+        ;;
+    p)  PATTERN=$OPTARG
+        curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} https://${SERVER}:${PORT}/services/saved/searches | grep -i $PATTERN
+        ;;
+    t)  curl -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} "https://${SERVER}:${PORT}/servicesNS/-/-/alerts/fired_alerts"
+        ;;
+    j)  curl -D- -u ${JIRA_USERNAME}:${JIRA_PASSWORD} -X POST --data '{ "fields": { "project": { "key": "ETHOS" }, "summary": "REST ye merry gentlemen.", "description": "Creating of an issue using projectkeys and issue type names using the REST API", "issuetype": { "name": "Bug" } } }' -H "Content-Type: application/json" https://jira.corp.adobe.com/rest/api/2/issue
+        ;;
+    esac
+done
+
+shift $((OPTIND-1))
+[ "$1" = "--" ] && shift
