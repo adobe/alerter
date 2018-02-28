@@ -4,7 +4,14 @@ Alerter is a tool to manage Splunk alerts, searches and other operations
 
 ## First steps
 
-Edit the config with the APP, SPLUNK_USERNAME, SPLUNK_PASSWORD and SERVER
+Edit the config with the APP, SPLUNK_USERNAME, SPLUNK_PASSWORD and SERVER. FILTER sets the default filter to show alerts. JIRA_USERNAME and JIRA_PASSWORD for JIRA integration.
+
+Example:
+
+`
+APP="app"
+FILTER="Sev"
+`
 
 ## Examples
 
@@ -20,7 +27,7 @@ Edit the config with the APP, SPLUNK_USERNAME, SPLUNK_PASSWORD and SERVER
 Sev3: Dev/Stage API blockembargoips.conf not found
 Sev2: Prod API connection refused
 Sev2: Prod API blockembargoips.conf not found
-Sev 1 : Prod Flight is Leaderless
+Sev1: Prod Flight is Leaderless
 Sev3: Dev/Stage API connection refused
 Sev3: Dev API Service Upstream Server
 Sev3: Dev/Stage API no memory in vhost_traffic_status_zone
