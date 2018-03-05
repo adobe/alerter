@@ -40,7 +40,7 @@ where:
   echo "$USAGE"
 }
 
-while getopts "h?vs:af:q:w:c:d:p:m:te:b:x:ju:" opt; do
+while getopts "h?vs:af:q:w:c:d:p:m:te:b:x:u:" opt; do
     case "$opt" in
     h|\?)
         show_help
@@ -107,8 +107,6 @@ while getopts "h?vs:af:q:w:c:d:p:m:te:b:x:ju:" opt; do
         curl -s -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} https://${SERVER}:${PORT}/services/saved/searches | grep -i $PATTERN
         ;;
     t)  curl -k -u ${SPLUNK_USERNAME}:${SPLUNK_PASSWORD} "https://${SERVER}:${PORT}/servicesNS/-/-/alerts/fired_alerts"
-        ;;
-    j)  curl -D- -u ${JIRA_USERNAME}:${JIRA_PASSWORD} -X POST --data '{ "fields": { "project": { "key": "ETHOS" }, "summary": "REST ye merry gentlemen.", "description": "Creating of an issue using projectkeys and issue type names using the REST API", "issuetype": { "name": "Bug" } } }' -H "Content-Type: application/json" https://jira.corp.adobe.com/rest/api/2/issue
         ;;
     esac
 done
