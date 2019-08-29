@@ -17,7 +17,9 @@
 # limitations under the License.
 #
 
-source config
+if [ -f "config" ]; then
+    source config
+fi
 
 show_help() {
   USAGE="$(basename "$0") [-h] [-s server] -- tool to manage Splunk alerts
